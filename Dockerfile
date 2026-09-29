@@ -1,12 +1,16 @@
-FROM python:3.12-slim
+FROM aiogram/telegram-bot-api:latest AS telegram_api
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-alpine
+
+RUN apk add --no-cache ffmpeg curl ca-certificates libstdc++ openssl
+
+COPY --from=telegram_api /usr/local/bin/telegram-bot-api /usr/local/bin/telegram-bot-api
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+RUN chmod +x /app/start.sh && mkdir -p /var/lib/telegram-bot-api /tmp/telegram-bot-api
 
-CMD ["python", "bot.py"]
+EXPOSE 8081
+CMD ["/app/start.sh"]
