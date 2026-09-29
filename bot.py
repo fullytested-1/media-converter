@@ -10,7 +10,7 @@ from telegram.constants import ChatAction
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
-from config import BOT_TOKEN, DOWNLOAD_DIR, MAX_DOWNLOAD_MB
+from config import BOT_TOKEN, DOWNLOAD_DIR, MAX_DOWNLOAD_MB, BOT_API_BASE_URL, BOT_API_FILE_URL, BOT_API_LOCAL_MODE
 from keyboards import main_keyboard, speed_keyboard, quality_keyboard, compress_keyboard
 from media import bass, black_white, change_speed, circle, compress, cut, duration, resize, square, to_mp3, run_ffmpeg, out_path
 
@@ -242,7 +242,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ {str(exc)}")
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = (Application.builder()\n        .token(BOT_TOKEN)\n        .base_url(BOT_API_BASE_URL)\n        .base_file_url(BOT_API_FILE_URL)\n        .local_mode(BOT_API_LOCAL_MODE)\n        .build())
     media_filter = filters.VIDEO | filters.AUDIO | filters.Document.ALL | filters.VOICE
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
