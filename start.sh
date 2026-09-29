@@ -29,22 +29,30 @@ class Health(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "3000"))), Health).serve_forever()
 ' &
 
-# Run Telegram's Local Bot API server so large files can be downloaded/uploaded.
+# Run Telegram's Local Bot API server for large-file support.
 telegram-bot-api   --api-id="${API_ID}"   --api-hash="${API_HASH}"   --local   --http-ip-address=127.0.0.1   --http-port=8081   --dir=/var/lib/telegram-bot-api   --temp-dir=/tmp/telegram-bot-api   --verbosity=1 &
 
 API="http://127.0.0.1:8081/bot${BOT_TOKEN}"
 
 echo "Starting Local Telegram Bot API..."
+READY=0
 for i in $(seq 1 60); do
   if curl -fsS "${API}/getMe" >/dev/null 2>&1; then
+    READY=1
     echo "Local Telegram Bot API is ready."
     break
   fi
   sleep 1
 done
 
-# Switch this bot token from Telegram's cloud Bot API to the local server.
-curl -fsS -X POST "${API}/logOut" >/dev/null 2>&1 || true
+if [ "${READY}" != "1" ]; then
+  echo "ERROR: Local Telegram Bot API did not become ready."
+  exit 1
+fi
+
+# IMPORTANT: Do not call /logOut on the local server here.
+# /logOut would immediately invalidate the token for this local session,
+# causing python-telegram-bot to fail with: BadRequest: Logged out.
 
 export BOT_API_BASE_URL="http://127.0.0.1:8081/bot"
 export BOT_API_FILE_URL="http://127.0.0.1:8081/file/bot"
