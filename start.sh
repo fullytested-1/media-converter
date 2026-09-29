@@ -5,15 +5,13 @@ set -eu
 : "${TELEGRAM_API_HASH:?TELEGRAM_API_HASH is required}"
 : "${BOT_TOKEN:?BOT_TOKEN is required}"
 
-telegram-bot-api \
-  --api-id="${TELEGRAM_API_ID}" \
-  --api-hash="${TELEGRAM_API_HASH}" \
-  --local \
-  --http-ip-address=127.0.0.1 \
-  --http-port=8081 \
-  --dir=/var/lib/telegram-bot-api \
-  --temp-dir=/tmp/telegram-bot-api \
-  --verbosity=1 &
+# Voroa Web Service health port.
+# This tiny server only keeps the web service endpoint alive; the Telegram bot
+# continues running in polling mode in the same container.
+PORT="${PORT:-3000}"
+python -m http.server "${PORT}" --bind 0.0.0.0 --directory /tmp >/tmp/health-server.log 2>&1 &
+
+telegram-bot-api   --api-id="${TELEGRAM_API_ID}"   --api-hash="${TELEGRAM_API_HASH}"   --local   --http-ip-address=127.0.0.1   --http-port=8081   --dir=/var/lib/telegram-bot-api   --temp-dir=/tmp/telegram-bot-api   --verbosity=1 &
 
 API="http://127.0.0.1:8081/bot${BOT_TOKEN}"
 
