@@ -2,9 +2,10 @@
 set -eu
 
 : "${BOT_TOKEN:?BOT_TOKEN is required}"
+: "${API_ID:?API_ID is required}"
+: "${API_HASH:?API_HASH is required}"
 
 # Voroa Web Service health endpoint.
-# Telegram polling runs as the main process.
 PORT="${PORT:-3000}"
 python -c '
 import os
@@ -28,13 +29,29 @@ class Health(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "3000"))), Health).serve_forever()
 ' &
 
-export BOT_API_BASE_URL="${BOT_API_BASE_URL:-https://api.telegram.org/bot}"
-export BOT_API_FILE_URL="${BOT_API_FILE_URL:-https://api.telegram.org/file/bot}"
-export BOT_API_LOCAL_MODE="0"
-export MAX_DOWNLOAD_MB="${MAX_DOWNLOAD_MB:-50}"
+# Run Telegram's Local Bot API server so large files can be downloaded/uploaded.
+telegram-bot-api   --api-id="${API_ID}"   --api-hash="${API_HASH}"   --local   --http-ip-address=127.0.0.1   --http-port=8081   --dir=/var/lib/telegram-bot-api   --temp-dir=/tmp/telegram-bot-api   --verbosity=1 &
+
+API="http://127.0.0.1:8081/bot${BOT_TOKEN}"
+
+echo "Starting Local Telegram Bot API..."
+for i in $(seq 1 60); do
+  if curl -fsS "${API}/getMe" >/dev/null 2>&1; then
+    echo "Local Telegram Bot API is ready."
+    break
+  fi
+  sleep 1
+done
+
+# Switch this bot token from Telegram's cloud Bot API to the local server.
+curl -fsS -X POST "${API}/logOut" >/dev/null 2>&1 || true
+
+export BOT_API_BASE_URL="http://127.0.0.1:8081/bot"
+export BOT_API_FILE_URL="http://127.0.0.1:8081/file/bot"
+export BOT_API_LOCAL_MODE="1"
+export MAX_DOWNLOAD_MB="${MAX_DOWNLOAD_MB:-2048}"
 
 echo "Starting Media Converter Bot..."
 echo "Health server listening on port ${PORT}"
-echo "Using Telegram cloud Bot API"
 
 exec python bot.py
