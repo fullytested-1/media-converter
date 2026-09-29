@@ -19,7 +19,7 @@ log = logging.getLogger("media-converter")
 
 def parse_time(value: str) -> float:
     value = value.strip().replace(",", ".")
-    if re.fullmatch(r"\\d+(?:\\.\\d+)?", value):
+    if re.fullmatch(r"\d+(?:\.\d+)?", value):
         return float(value)
     parts = value.split(":")
     if len(parts) == 2:
@@ -56,13 +56,13 @@ async def send_result(message, path: str, as_document=False):
             await message.reply_document(document=path)
         elif path.endswith(".mp3"):
             await message.reply_audio(audio=path)
-        elif path.endswith(".webm"):
-            await message.reply_video(video=path, supports_streaming=True)
         else:
             await message.reply_video(video=path, supports_streaming=True)
     finally:
-        try: os.remove(path)
-        except OSError: pass
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 async def process(update, context, action: str, value=None):
     src = context.user_data.get("media_path")
@@ -72,16 +72,26 @@ async def process(update, context, action: str, value=None):
     msg = update.effective_message
     await context.bot.send_chat_action(msg.chat_id, ChatAction.UPLOAD_DOCUMENT)
     try:
-        if action == "mp3": out = await to_mp3(src)
-        elif action in {"slow", "slowmo", "speed"}: out = await change_speed(src, float(value))
-        elif action == "bass": out = await bass(src)
-        elif action in {"cut", "trim"}: out = await cut(src, *value)
-        elif action == "resize": out = await resize(src, int(value))
-        elif action == "square": out = await square(src)
-        elif action == "black": out = await black_white(src)
-        elif action == "compress": out = await compress(src, value)
-        elif action == "circle": out = await circle(src)
-        else: raise ValueError("Unknown action.")
+        if action == "mp3":
+            out = await to_mp3(src)
+        elif action in {"slow", "slowmo", "speed"}:
+            out = await change_speed(src, float(value))
+        elif action == "bass":
+            out = await bass(src)
+        elif action in {"cut", "trim"}:
+            out = await cut(src, *value)
+        elif action == "resize":
+            out = await resize(src, int(value))
+        elif action == "square":
+            out = await square(src)
+        elif action == "black":
+            out = await black_white(src)
+        elif action == "compress":
+            out = await compress(src, value)
+        elif action == "circle":
+            out = await circle(src)
+        else:
+            raise ValueError("Unknown action.")
         await send_result(msg, out)
     except Exception as exc:
         log.exception("Processing failed")
@@ -101,7 +111,8 @@ async def on_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     try:
         result = await download_message_media(message, update.effective_user.id)
-        if not result: return
+        if not result:
+            return
         path, is_video = result
         pending = context.user_data.get("pending")
 
@@ -115,27 +126,36 @@ async def on_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             out = out_path(".mp4")
             try:
                 if pending == "avmix":
-                    await run_ffmpeg(["-i", first, "-i", second, "-filter_complex",
+                    await run_ffmpeg([
+                        "-i", first, "-i", second, "-filter_complex",
                         "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2[a]",
-                        "-map", "0:v?", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", out])
+                        "-map", "0:v?", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", out
+                    ])
                 else:
-                    await run_ffmpeg(["-i", first, "-i", second, "-filter_complex",
+                    await run_ffmpeg([
+                        "-i", first, "-i", second, "-filter_complex",
                         "[0:v][1:v]hstack=inputs=2[v]",
-                        "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", out])
+                        "-map", "[v]", "-map", "0:a?", "-c:v", "libx264",
+                        "-preset", "veryfast", "-c:a", "aac", out
+                    ])
                 await send_result(message, out)
             except Exception as exc:
                 await message.reply_text(f"❌ Mix failed: {str(exc)[:1000]}")
             finally:
                 context.user_data.pop("pending", None)
                 for p in (first, second):
-                    try: os.remove(p)
-                    except OSError: pass
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
             return
 
         old = context.user_data.get("media_path")
         if old and old != path:
-            try: os.remove(old)
-            except OSError: pass
+            try:
+                os.remove(old)
+            except OSError:
+                pass
         context.user_data["media_path"] = path
         context.user_data["media_kind"] = "video" if is_video else "audio"
         d = duration(path)
@@ -152,13 +172,17 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
 
     if data == "back":
-        await q.edit_message_text("Choose an action:", reply_markup=main_keyboard(context.user_data.get("media_kind", "audio")))
+        await q.edit_message_text(
+            "Choose an action:",
+            reply_markup=main_keyboard(context.user_data.get("media_kind", "audio"))
+        )
         return
 
     if data in {"mp3", "bass", "square", "black", "circle", "doc"}:
         if data == "doc":
             src = context.user_data.get("media_path")
-            if src: await send_result(q.message, src, as_document=True)
+            if src:
+                await send_result(q.message, src, as_document=True)
             return
         if data in {"square", "black", "circle"} and context.user_data.get("media_kind") != "video":
             await q.message.reply_text("That option is for video.")
@@ -216,33 +240,47 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if pending in {"cut", "trim"}:
             parts = text.split()
-            if len(parts) != 2: raise ValueError("Send exactly two times: start end")
+            if len(parts) != 2:
+                raise ValueError("Send exactly two times: start end")
             start, end = parse_time(parts[0]), parse_time(parts[1])
             total = duration(context.user_data["media_path"])
-            if start < 0 or end <= start or (total and end > total + 0.5): raise ValueError("Invalid range for this media.")
+            if start < 0 or end <= start or (total and end > total + 0.5):
+                raise ValueError("Invalid range for this media.")
             context.user_data.pop("pending", None)
             await process(update, context, pending, (start, end))
             return
+
         if pending in {"slow", "slowmo", "speed"}:
             factor = float(text)
-            if not 0.25 <= factor <= 4: raise ValueError("Speed must be between 0.25x and 4x.")
+            if not 0.25 <= factor <= 4:
+                raise ValueError("Speed must be between 0.25x and 4x.")
             context.user_data.pop("pending", None)
             await process(update, context, pending, factor)
             return
+
         if pending.endswith(":target"):
             action = pending.split(":", 1)[0]
             target = parse_time(text)
             current = duration(context.user_data["media_path"])
-            if target <= 0 or current <= 0: raise ValueError("Could not determine duration.")
+            if target <= 0 or current <= 0:
+                raise ValueError("Could not determine duration.")
             factor = current / target
-            if not 0.25 <= factor <= 4: raise ValueError(f"Calculated speed is {factor:.2f}x; supported range is 0.25x–4x.")
+            if not 0.25 <= factor <= 4:
+                raise ValueError(f"Calculated speed is {factor:.2f}x; supported range is 0.25x–4x.")
             context.user_data.pop("pending", None)
             await process(update, context, action, factor)
     except Exception as exc:
         await update.message.reply_text(f"❌ {str(exc)}")
 
 def main():
-    app = (Application.builder()\n        .token(BOT_TOKEN)\n        .base_url(BOT_API_BASE_URL)\n        .base_file_url(BOT_API_FILE_URL)\n        .local_mode(BOT_API_LOCAL_MODE)\n        .build())
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .base_url(BOT_API_BASE_URL)
+        .base_file_url(BOT_API_FILE_URL)
+        .local_mode(BOT_API_LOCAL_MODE)
+        .build()
+    )
     media_filter = filters.VIDEO | filters.AUDIO | filters.Document.ALL | filters.VOICE
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
